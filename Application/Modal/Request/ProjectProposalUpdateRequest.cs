@@ -8,8 +8,8 @@ namespace Application.Modal.Request
 {
     public class ProjectProposalUpdateRequest
     {
-        public string ProjectTitle { get; set; }
-        public string ProjectDescription { get; set; }
-        public int EstimatedDuration { get; set; }
+        public string title { get; set; }
+        public string description { get; set; }
+        public int duration { get; set; }
     }
 }

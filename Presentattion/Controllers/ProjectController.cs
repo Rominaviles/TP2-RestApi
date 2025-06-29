@@ -58,7 +58,7 @@ namespace Presentation.Controllers
         {
             try
             {
-                var result = await _service.CreateProjectProposal(dto, dto.user); // Usamos dto.user
+                var result = await _service.CreateProjectProposal(dto, dto.user);
                 return CreatedAtAction(nameof(GetProjectById), new { result.id }, result);
             }
             catch (BadRequestException ex)
@@ -85,27 +85,41 @@ namespace Presentation.Controllers
         [ProducesResponseType(typeof(ApiErrorException), 400)]
         [ProducesResponseType(typeof(ApiErrorException), 404)]
         [ProducesResponseType(typeof(ApiErrorException), 409)]
-
         public async Task<IActionResult> DecideStep(Guid id, [FromBody] DecisionStepRequest dto)
         {
             try
             {
+                // Validación del ID del proyecto para asegurarse de que sea un GUID válido
+                if (id == Guid.Empty)
+                {
+                    return BadRequest(new { message = "El ID del proyecto no es un GUID válido." });
+                }
+
+                // Validación del usuario
                 if (dto.User <= 0 || dto.User > 6)
                 {
                     return BadRequest(new { message = "ID de usuario inválido." });
                 }
 
+                // Validar que el status esté dentro del rango correcto
+                if (dto.Status < 1 || dto.Status > 4)
+                {
+                    return BadRequest(new { message = "El estado no es válido." });
+                }
+
                 var result = await _serviceApproval.ApproveStepAsync(id, dto.User, dto.Status, dto.Observation);
 
                 if (!result)
+                {
                     return Conflict(new { message = "El estado del proyecto no se pudo actualizar correctamente." });
+                }
 
                 var updatedProject = await _service.GetProjectProposalDetailAsync(id);
                 return Ok(updatedProject);
             }
             catch (ConflictException ex)
             {
-                return BadRequest(new ApiErrorException { Message = ex.Message }); 
+                return Conflict(new { message = ex.Message });
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -113,21 +127,23 @@ namespace Presentation.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return Conflict(new { message = ex.Message });
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new { message = ex.Message }); // 
+                return BadRequest(new { message = ex.Message });
             }
-            catch(BadRequestException ex)
+            catch (BadRequestException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                return StatusCode(400, new { message = ex.Message });
+                return StatusCode(500, new { message = "Ocurrió un error inesperado.", error = ex.Message });
             }
         }
+
+
 
 
         [HttpPut("{id}")]
@@ -135,6 +151,7 @@ namespace Presentation.Controllers
         [ProducesResponseType(typeof(ApiErrorException), 400)]
         [ProducesResponseType(typeof(ApiErrorException), 404)]
         [ProducesResponseType(typeof(ApiErrorException), 409)]
+        [ProducesResponseType(typeof(ApiErrorException), 500)]
         public async Task<IActionResult> UpdateProject(Guid id, [FromBody] ProjectProposalUpdateRequest dto)
         {
             try
@@ -144,13 +161,28 @@ namespace Presentation.Controllers
             }
             catch (NotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return NotFound(new { message = ex.Message }); 
+            }
+            catch (BadRequestException ex)
+            {
+                return BadRequest(new { message = ex.Message }); 
+            }
+            catch (ConflictException ex)
+            {
+                return Conflict(new { message = ex.Message }); 
             }
             catch (InvalidOperationException ex)
             {
                 return Conflict(new { message = ex.Message });
             }
+            catch (Exception ex)
+            {
+                // Fallback general ante cualquier error inesperado
+                return StatusCode(500, new { message = "Ocurrió un error inesperado.", error = ex.Message });
+            }
         }
+
+
 
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(ProjectProposalResponse), 200)]

@@ -114,24 +114,23 @@ namespace Application.Services
                         (r.MaxAmount > 0 ? 1 : 0))
                     .First()
                 )
+                .OrderBy(r => r.StepOrder)
                 .ToList();
 
             // Crear los pasos de aprobación según las reglas seleccionadas
             var steps = new List<ProjectApprovalStep>();
-            int order = 1;
 
-            foreach (var rule in selectedRules)
+            foreach (var rule in selectedRules.OrderBy(r => r.StepOrder))
             {
                 var step = new ProjectApprovalStep
                 {
                     ProjectProposalId = proposal.Id,
                     ApproverRoleId = rule.ApproverRoleId,
-                    StepOrder = order,
-                    Status = 1, // Pendiente
+                    StepOrder = rule.StepOrder, // 👈 Usar el StepOrder real de la regla
+                    Status = 1,
                     ApproverUserId = null
                 };
                 steps.Add(step);
-                order++;
             }
 
             // Guardar propuesta y pasos en transacción
@@ -146,8 +145,6 @@ namespace Application.Services
 
             return ProjectMapper.ProjectProposalMapper.DetailDTO(proposalCompleted);
         }
-
-
 
 
         public async Task<ProjectProposalResponse> GetProjectProposalDetailAsync(Guid proposalId)
@@ -169,18 +166,32 @@ namespace Application.Services
             if (proposal.Status != 4)
                 throw new InvalidOperationException("Solo se pueden modificar proyectos en estado Observado.");
 
-            proposal.Title = dto.ProjectTitle;
-            proposal.Description = dto.ProjectDescription;
-            proposal.EstimatedDuration = dto.EstimatedDuration;
+            if (string.IsNullOrWhiteSpace(dto.title))
+                throw new BadRequestException("El título es obligatorio.");
+
+            if (string.IsNullOrWhiteSpace(dto.description))
+                throw new BadRequestException("La descripción es obligatoria.");
+
+            if (dto.duration <= 0)
+                throw new BadRequestException("La duración estimada debe ser mayor a cero.");
+
+            string normalizedTitle = dto.title.Trim().ToLower();
+            bool titleExists = await _projectProposalQuery.TitleExistAsync(normalizedTitle, proposalId);
+            if (titleExists)
+                throw new ConflictException("Ya existe una propuesta con ese título.");
+
+            proposal.Title = dto.title;
+            proposal.Description = dto.description;
+            proposal.EstimatedDuration = dto.duration;
 
             var updated = await _projectProposalCommand.UpdateProjectProposalAsync(proposal);
             if (!updated)
                 throw new InvalidOperationException("Error al actualizar la propuesta.");
 
-            // Volvés a obtener la entidad completa con relaciones
             var updatedProposal = await _projectProposalQuery.GetProjectProposalByIdAsync(proposalId);
             return ProjectMapper.ProjectProposalMapper.DetailDTO(updatedProposal);
         }
+
 
         public async Task<List<FilteredResopnse>> GetFilteredProjectsAsync(string? title, int? status, int? applicant, int? approvalUser)
         {
@@ -196,17 +207,8 @@ namespace Application.Services
             var projects = await _projectProposalQuery.GetFilteredProjectsAsync(title, status, applicant, approvalUser);
 
             if (projects == null || !projects.Any())
-                return new List<FilteredResopnse>(){
-                new FilteredResopnse
-                {
-                    Id = Guid.Empty,
-                    Title = "Sin resultados",
-                    Description = "",
-                    Area = "N/A",
-                    Type = "N/A",
-                    Status = "Sin datos"
-                }
-            };
+                return new List<FilteredResopnse>();
+
             return projects.Select(p =>
             {
                 var dto = ProjectMapper.FilteredDTO(p);

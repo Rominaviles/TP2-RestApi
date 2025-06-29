@@ -79,7 +79,6 @@ namespace Application.Services
             if (previousSteps.Any(p => p.Status != 2))
                 throw new ArgumentException("No puede aprobar este paso hasta que se aprueben todos los pasos anteriores.");
 
-            // Actualizar información del paso
             step.ApproverUserId = userId;
             step.Status = status;
             step.Observations = observations;
@@ -87,34 +86,39 @@ namespace Application.Services
 
             await approvalStepCommand.UpdateStepStatusAsync(step, status);
 
-            if (status == 3)
+            // Actualizar el estado del proyecto dependiendo del paso aprobado
+            if (status == 3) // Rechazado
                 return await approvalStepCommand.UpdateProposalStatusAsync(step.ProjectProposalId, 3);
 
-            if (status == 4)
+            if (status == 4) // Observado
                 return await approvalStepCommand.UpdateProposalStatusAsync(step.ProjectProposalId, 4);
 
-            if (status == 2)
+            if (status == 2) // Aprobado
             {
-                var remaining = allSteps.Where(s => s.Id != step.Id);
-                var allApproved = remaining.All(s => s.Status == 2);
+                // Verificar si todos los pasos están aprobados
+                var remaining = allSteps.Where(s => s.Id != step.Id).ToList();
 
-                if (allApproved)
-                    return await approvalStepCommand.UpdateProposalStatusAsync(step.ProjectProposalId, 2);
+                // Si todos los demás pasos están aprobados, cambiar el estado del proyecto a Aprobado (2)
+                if (remaining.All(s => s.Status == 2))
+                {
+                    return await approvalStepCommand.UpdateProposalStatusAsync(step.ProjectProposalId, 2); // Proyecto Aprobado
+                }
+
+                // Si no todos los pasos están aprobados, dejar el proyecto en Pendiente (1)
+                return await approvalStepCommand.UpdateProposalStatusAsync(step.ProjectProposalId, 1); // Proyecto Pendiente
             }
 
             return true;
         }
 
-
-
         public async Task<bool> ObserveAsync(ProjectApprovalStep step, string comment)
         {
-            step.Status = 3; // Observado
+            step.Status = 4; // Observado
             step.Observations = comment;
             step.DecisionDate = DateTime.UtcNow;
 
             var proposal = await projectProposalQuery.GetProjectProposalByIdAsync(step.ProjectProposalId);
-            proposal.Status = 3; // Observado
+            proposal.Status = 4; // Observado
             await projectProposalCommand.UpdateProjectProposalAsync(proposal);
 
             return await approvalStepCommand.UpdateStepStatusAsync(step, step.Status);
