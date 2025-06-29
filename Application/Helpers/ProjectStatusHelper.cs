@@ -10,32 +10,40 @@ namespace Application.Helpers
 {
     public class ProjectStatusHelper
     {
-        public static int CalcularEstadoProyecto(List<ProjectApprovalStep> pasos)
+        public static ApprovalStatusEnum CalcularEstadoProyecto(List<ProjectApprovalStep> pasos)
         {
-            if (pasos.Any(p => p.Status == 3)) // Rechazado
-                return 3;
+            // Verificar si hay algún paso rechazado
+            if (pasos.Any(p => p.Status == (int)ApprovalStatusEnum.Rejected))
+                return ApprovalStatusEnum.Rejected;
 
-            if (pasos.Any(p => p.Status == 4)) // Observado
-                return 4;
+            // Verificar si hay algún paso observado
+            if (pasos.Any(p => p.Status == (int)ApprovalStatusEnum.Observed))
+                return ApprovalStatusEnum.Observed;
 
-            if (pasos.All(p => p.Status == 2)) // Todos aprobados
-                return 2;
+            // Verificar si todos están aprobados
+            if (pasos.All(p => p.Status == (int)ApprovalStatusEnum.Approved))
+                return ApprovalStatusEnum.Approved;
 
-            // Si hay alguno pendiente (1) y el anterior está aprobado
+            // Verificar el flujo secuencial para pasos pendientes
             var pasosOrdenados = pasos.OrderBy(p => p.StepOrder).ToList();
+
             for (int i = 0; i < pasosOrdenados.Count; i++)
             {
                 var actual = pasosOrdenados[i];
-                if (actual.Status == 1)
+
+                // Si encontramos un paso pendiente
+                if (actual.Status == (int)ApprovalStatusEnum.Pending)
                 {
-                    if (i == 0 || pasosOrdenados[i - 1].Status == 2)
-                        return 1; // Pendiente
+                    // El primer paso siempre puede estar pendiente
+                    // O si el paso anterior está aprobado
+                    if (i == 0 || pasosOrdenados[i - 1].Status == (int)ApprovalStatusEnum.Approved)
+                        return ApprovalStatusEnum.Pending;
                 }
             }
 
-            return 1; // Por defecto, pendiente
+            // Por defecto, pendiente
+            return ApprovalStatusEnum.Pending;
 
         }
-
     }
 }

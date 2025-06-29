@@ -50,40 +50,47 @@ namespace Application.Services
 
         public async Task<ProjectProposalResponse> CreateProjectProposal(ProjectProposalRequest dto, int createdByUserId)
         {
+            // Validación del título
             dto.title = dto.title?.Trim().ToLower();
             if (string.IsNullOrWhiteSpace(dto.title))
                 throw new BadRequestException("El título es obligatorio.");
 
+            // Validación del usuario
             var user = await _userQuery.GetUserByIdAsync(createdByUserId);
             if (user == null)
                 throw new BadRequestException("El usuario que crea el proyecto no existe.");
 
+            // Validación de duplicados por título
             if (await _projectProposalQuery.TitleExistAsync(dto.title, null))
                 throw new ConflictException("Ya existe una propuesta con ese título.");
 
+            // Validación de descripción
             if (string.IsNullOrWhiteSpace(dto.description))
                 throw new BadRequestException("La descripción es obligatoria.");
+
+            // Validación del monto
             if (dto.amount <= 0)
                 throw new BadRequestException("El monto debe ser mayor a cero.");
+
+            // Validación de la duración
             if (dto.duration <= 0)
                 throw new BadRequestException("La duración debe ser mayor a cero.");
-            var area = await _informationQuery.GetAllAreasAsync();
-            if (!area.Any())
-                throw new BadRequestException("No se encontraron áreas disponibles.");
-            if (!area.Any(a => a.Id == dto.area))
+
+            // Validación del área existente
+            bool areaExists = await _informationQuery.AreaExistsAsync(dto.area);
+            if (!areaExists)
                 throw new BadRequestException("El área indicada no existe.");
 
-            var type = await _informationQuery.GetAllProjectTypesAsync();
-            if (!type.Any())
-                throw new BadRequestException("No se encontraron tipos de proyecto disponibles.");
-            if (!type.Any(t => t.Id == dto.type))
+            // Validación del tipo de proyecto existente
+            bool typeExists = await _informationQuery.ProjectTypeExistsAsync(dto.type);
+            if (!typeExists)
                 throw new BadRequestException("El tipo indicado no existe.");
 
-            // Crear entidad
+            // Crear la entidad de la propuesta
             var proposal = new ProjectProposal
             {
                 Id = Guid.NewGuid(),
-                Title = dto.title.Trim().ToLower(),
+                Title = dto.title,
                 Description = dto.description,
                 Area = dto.area,
                 Type = dto.type,
@@ -91,14 +98,13 @@ namespace Application.Services
                 EstimatedDuration = dto.duration,
                 CreateAt = DateTime.UtcNow,
                 CreateBy = createdByUserId,
-                Status = 1
+                Status = 1 // Pendiente
             };
 
-            // Obtener reglas de aprobación aplicables
+            // Obtener las reglas de aprobación aplicables de manera eficiente
             var applicableRules = await _approvalRuleQuery.GetAllApprovalRuleByAreaAndType(dto.area, dto.type, dto.amount);
-            
 
-            
+            // Seleccionar las reglas con mayor prioridad
             var selectedRules = applicableRules
                 .GroupBy(p => p.StepOrder)
                 .Select(group =>
@@ -110,6 +116,7 @@ namespace Application.Services
                 )
                 .ToList();
 
+            // Crear los pasos de aprobación según las reglas seleccionadas
             var steps = new List<ProjectApprovalStep>();
             int order = 1;
 
@@ -120,24 +127,26 @@ namespace Application.Services
                     ProjectProposalId = proposal.Id,
                     ApproverRoleId = rule.ApproverRoleId,
                     StepOrder = order,
-                    Status = 1,
+                    Status = 1, // Pendiente
                     ApproverUserId = null
                 };
                 steps.Add(step);
                 order++;
             }
 
-
+            // Guardar propuesta y pasos en transacción
             var success = await _approvalStepCommand.CreateProposalWithSteps(proposal, steps);
             if (!success)
                 throw new InvalidOperationException("No se pudo guardar la propuesta.");
 
+            // Obtener la propuesta recién creada para retorno
             var proposalCompleted = await _projectProposalQuery.GetProjectProposalByIdAsync(proposal.Id);
-            if (proposalCompleted is null)
+            if (proposalCompleted == null)
                 throw new NotFoundException("No se pudo obtener la propuesta recién creada.");
 
             return ProjectMapper.ProjectProposalMapper.DetailDTO(proposalCompleted);
         }
+
 
 
 

@@ -49,15 +49,16 @@ namespace Presentation.Controllers
             }
         }
 
+
         [HttpPost]
-        [ProducesResponseType(typeof(ProjectProposalRequest), 201)]
+        [ProducesResponseType(typeof(ProjectProposalResponse), 201)]
         [ProducesResponseType(typeof(ApiErrorException), 400)]
         [ProducesResponseType(typeof(ApiErrorException), 409)]
-        public async Task<IActionResult> CreateProject([FromBody] ProjectProposalRequest dto, [FromQuery] int userId)
+        public async Task<IActionResult> CreateProject([FromBody] ProjectProposalRequest dto)
         {
             try
             {
-                var result = await _service.CreateProjectProposal(dto, userId);
+                var result = await _service.CreateProjectProposal(dto, dto.user); // Usamos dto.user
                 return CreatedAtAction(nameof(GetProjectById), new { result.id }, result);
             }
             catch (BadRequestException ex)
@@ -72,11 +73,12 @@ namespace Presentation.Controllers
             {
                 return Conflict(new ApiErrorException { Message = ex.Message });
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 return StatusCode(500, new ApiErrorException { Message = ex.Message });
             }
         }
+
 
         [HttpPost("{id}/decision")]
         [ProducesResponseType(typeof(ProjectProposalResponse), 200)]
