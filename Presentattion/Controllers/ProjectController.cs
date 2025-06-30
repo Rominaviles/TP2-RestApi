@@ -80,7 +80,7 @@ namespace Presentation.Controllers
         }
 
 
-        [HttpPost("{id}/decision")]
+        [HttpPatch("{id}/decision")]
         [ProducesResponseType(typeof(ProjectProposalResponse), 200)]
         [ProducesResponseType(typeof(ApiErrorException), 400)]
         [ProducesResponseType(typeof(ApiErrorException), 404)]
@@ -146,7 +146,7 @@ namespace Presentation.Controllers
 
 
 
-        [HttpPut("{id}")]
+        [HttpPatch("{id}")]
         [ProducesResponseType(typeof(ProjectProposalResponse), 200)]
         [ProducesResponseType(typeof(ApiErrorException), 400)]
         [ProducesResponseType(typeof(ApiErrorException), 404)]
